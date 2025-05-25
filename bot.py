@@ -24,51 +24,41 @@ from pyrogram.types import (
     InlineKeyboardButton,
     ReplyKeyboardMarkup,
     KeyboardButton,
-    ReplyKeyboardRemove
+    ReplyKeyboardRemove,
+    ForceReply
 )
 from supabase import create_client
 
-# === Project Imports ===
-import main
+# === Load Configuration from Environment Variables ===
+API_ID = int(os.getenv("API_ID", "0"))
+API_HASH = os.getenv("API_HASH", "")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
-# === Patch generate_dynamic_cookies if not defined ===
-if not hasattr(main, 'generate_dynamic_cookies'):
-    def generate_dynamic_cookies(*args, **kwargs):
-        return {
-            "sessionid": "fake_session_123",
-            "token": "dummy_token"
-        }
-    main.generate_dynamic_cookies = generate_dynamic_cookies
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_SERVICE_ROLE = os.getenv("SUPABASE_SERVICE_ROLE", "")
+SUPABASE_HEADERS = {
+    "apikey": SUPABASE_SERVICE_ROLE,
+    "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE}",
+    "Content-Type": "application/json"
+}
 
-import os
-from dotenv import load_dotenv
-from pyrogram import Client
-from supabase import create_client
-
-# Load .env locally only
-load_dotenv()
-
-API_ID = int(os.getenv("API_ID"))
-API_HASH = os.getenv("API_HASH")
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_ROLE = os.getenv("SUPABASE_SERVICE_ROLE")
-ADMIN_ID = int(os.getenv("ADMIN_ID"))
-
-# Initialize Supabase
+# === Initialize Supabase Client ===
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE)
 
-# Initialize Pyrogram Client
+# === Initialize Pyrogram Bot ===
 app = Client("log_search_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# Utility to generate a unique referral code
-# === Imports ===
+# === Global Variables ===
+COOKIE_FILE = "cookie.json"
+
+# === Utility Imports ===
 from pyrogram import filters
 from pyrogram.types import ReplyKeyboardMarkup, KeyboardButton, ForceReply, InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime, timezone
 from functools import wraps
-import random, string
-
+import random
+import string
 # === Utility Functions ===
 
 def generate_referral_code():
@@ -142,7 +132,7 @@ def redeem_referral_code(user_id, referral_code):
         referrer.get("points", 0) + 1,
         referrer.get("search_uses_left", 0)
     )
-    
+
     # Update redeemer (gain 1 point, get 3 search uses for example)
     update_user_points_and_uses(
         user_id,
@@ -171,24 +161,24 @@ async def start(client, message):
         reply_markup=keyboard
     )
 
-from telegram import ReplyKeyboardRemove
+
 
 @app.on_message(filters.command("me"))
 async def me(client, message):
     user = get_or_create_user(message.from_user.id)
     points, uses = user.get("points", 0), user.get("search_uses_left", 0)
-    
+
     keyboard = (
         ReplyKeyboardMarkup([[KeyboardButton("🔗 My Referral"), KeyboardButton("🎟️ Redeem Referral"), KeyboardButton("💎 Redeem Points")]], resize_keyboard=True)
     )
-    
+
     msg = (
         f"👤 **Account Info**\n\n✨ **Points**: `{points}` pts\n🔎 **Search Uses Left**: `{uses}`"
         if points >= 20 else
         f"👤 **Referral Panel**\n\n✨ **Points**: `{points}` pts\n"
         "📢 Share your code to earn **+1 point**!\nYou need `20 pts` to unlock full access."
     )
-    
+
     await message.reply(msg, reply_markup=keyboard)
 
 @app.on_message(filters.text & filters.regex("^(🔗 My Referral|/myreferral)$"))
@@ -196,10 +186,10 @@ async def show_referral_code_command(client, message):
     user = get_user_from_database(message.from_user.id)
     if not user:
         return await message.reply("❌ No data found.")
-    
+
     code = user.get("referral_code")
     points = user.get("points", 0)
-    
+
     share_text = (
         "@AkiReynBot 🚀 Get Free Access!\n\n"
         "To Share Your Referral Code:\n"
@@ -217,7 +207,7 @@ async def show_referral_code_command(client, message):
     keyboard = InlineKeyboardMarkup(
         [[InlineKeyboardButton("📢 Share", switch_inline_query=share_text)]]
     )
-    
+
     await message.reply(
         f"💳 **Your Code**: `{code}`\n✨ **Points**: `{points}` pts",
         reply_markup=keyboard
@@ -237,14 +227,14 @@ async def handle_redeem_reply(client, message):
         result = redeem_referral_code(user_id, message.text.strip())
         await message.reply(result)
         user = get_user_from_database(user_id)
-        
+
         # Reset keyboard after handling the referral
         keyboard = (
             ReplyKeyboardMarkup([[KeyboardButton("🔗 My Referral"), KeyboardButton("🎟️ Redeem Referral"), KeyboardButton("💎 Redeem Points")]], resize_keyboard=True)
             if user.get("points", 0) >= 20 else
             ReplyKeyboardMarkup([[KeyboardButton("🔗 My Referral"), KeyboardButton("🎟️ Redeem Referral")]], resize_keyboard=True)
         )
-        
+
         await message.reply("✅ Process complete!" if user.get("points", 0) >= 20 else "✅ Keep sharing for more points!", reply_markup=keyboard)
 
 @app.on_message(filters.command("redeemreferral"))
@@ -256,7 +246,7 @@ async def redeem_referral_manual(client, message):
     result = redeem_referral_code(message.from_user.id, code)
     await message.reply(result)
     user = get_user_from_database(message.from_user.id)
-    
+
     # Reset keyboard after processing referral
     keyboard = (
         ReplyKeyboardMarkup([[KeyboardButton("🔗 My Referral"), KeyboardButton("🎟️ Redeem Referral"), KeyboardButton("💎 Redeem Points")]], resize_keyboard=True)
@@ -275,7 +265,7 @@ async def redeem_points(client, message):
     # Ensure the user exists
     if not user:
         return await message.reply("❌ No user data found.")
-    
+
     # Check if the user has enough points
     if user.get("points", 0) < 20:
         return await message.reply("❌ You need at least 20 points to redeem points.\nShare your referrals or buy keys from @thatkidAki!")
@@ -358,7 +348,7 @@ async def announcement(client, message):
 def store_key(key, duration, owner_id):
     # Calculate expiry time based on the given duration
     expiry_time = (datetime.now(timezone.utc) + duration).isoformat()
-    
+
     # Prepare data to insert into the 'keys' table
     data = {
         "key": key,
@@ -368,7 +358,7 @@ def store_key(key, duration, owner_id):
 
     # Make the API request to insert the key data into the 'keys' table
     response = requests.post(f"{SUPABASE_URL}/rest/v1/keys", headers=SUPABASE_HEADERS, json=data)
-    
+
     # Debugging: Print the response details
     print("🔍 Supabase Response:", response.status_code, response.text)
 
@@ -381,13 +371,13 @@ def check_user_access(user_id):
     # Get the key associated with the user by checking redeemed_by
     response = requests.get(f"{SUPABASE_URL}/rest/v1/keys?redeemed_by=eq.{user_id}", headers=SUPABASE_HEADERS)
     keys = response.json()
-    
+
     if keys:
         # Get the expiry time from the returned keys
         expiry_time = datetime.fromisoformat(keys[0]["expiry"]).replace(tzinfo=timezone.utc)
         # Check if the key is still valid (not expired)
         return expiry_time > datetime.now(timezone.utc)
-    
+
     return False
 
 # -------------------------
@@ -449,7 +439,7 @@ async def generate_key(client, message):
 
         # Generate a random 15-character key (alphanumeric)
         key = "".join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", k=15))
-        
+
         success = store_key(key, duration, message.from_user.id)
         if success:
             expiry_time = (datetime.now(timezone.utc) + duration).strftime('%Y-%m-%d %H:%M:%S')
@@ -543,7 +533,7 @@ async def check_status(client, message):
         # Fetch the key details for the user
         response = requests.get(f"{SUPABASE_URL}/rest/v1/keys?redeemed_by=eq.{user_id}", headers=SUPABASE_HEADERS)
         keys = response.json()
-        
+
         if not keys:
             await message.reply("🚫 You haven't redeemed a key yet!")
             return
@@ -565,7 +555,7 @@ async def check_status(client, message):
 
             expiry_str = expiry_time_pht.strftime('%Y-%m-%d %H:%M:%S')
             time_left_str = f"{int(days)}d {int(hours)}h {int(minutes)}m"
-            
+
             await message.reply(f"⏳ **Your key expires on:** `{expiry_str} PHT`\n🕒 **Time left:** `{time_left_str}`")
     except Exception as e:
         await message.reply(f"❌ Error: {str(e)}")
@@ -612,7 +602,7 @@ async def remove_url_request(client, message: Message):
 async def process_file(client, message: Message):
     """ Process uploaded file and remove URLs """
     user_id = message.from_user.id
-    
+
     # Check if user is in the correct state
     if user_state.get(user_id) != "awaiting_file":
         return
@@ -622,7 +612,7 @@ async def process_file(client, message: Message):
 
     # Download the file
     file_path = await message.download()
-    
+
     # Read file content
     with open(file_path, "r", encoding="utf-8") as file:
         lines = file.readlines()
@@ -663,14 +653,24 @@ async def process_file(client, message: Message):
 
 # 🔍 Function to get log files (files starting with "logs" and ending with ".txt")
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from functools import wraps
 from pyrogram import Client, filters
-from pyrogram.types import ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton, KeyboardButton
 from pyrogram import errors
 from collections import Counter
 import os, random
 from supabase import create_client
+
+cooldown_tracker = {}  # user_id: datetime of last /search
+COOLDOWN_PERIOD = timedelta(seconds=30)
+
+user_last_format_message = {}
+
+# Supabase config
+url = 'https://psxjagzdlcrxtonmezpm.supabase.co'
+key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzeGphZ3pkbGNyeHRvbm1lenBtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NDIwNDM2OCwiZXhwIjoyMDU5NzgwMzY4fQ.9-UTy_y0qDEfK6N0n_YspX3BcY3CVMb2bk9tPaiddWU'
+supabase = create_client(url, key)
 
 # --- Supabase helpers ---
 
@@ -713,6 +713,18 @@ def restricted(func):
 @restricted
 async def ask_keyword(client, message):
     user_id = message.from_user.id
+    now = datetime.now(timezone.utc)
+
+    # Check cooldown
+    last_used = cooldown_tracker.get(user_id)
+    if last_used and now - last_used < COOLDOWN_PERIOD:
+        remaining = COOLDOWN_PERIOD - (now - last_used)
+        await message.reply(f"⏳ Please wait {int(remaining.total_seconds())} seconds before searching again.")
+        return
+
+    # Set new cooldown time
+    cooldown_tracker[user_id] = now
+
     access_type = check_user_access(user_id)
     if not access_type:
         await message.reply("❌ You don't have enough search uses left or a valid key.")
@@ -780,20 +792,32 @@ async def back_to_main_menu(client, message):
     await message.reply("🔎 **Database Search**\n\n📌 Choose a keyword to search:", reply_markup=keyboard)
 
 # --- UI: Format selection ---
-
 async def ask_format(client, message, keyword):
+    user_id = message.from_user.id
+    chat_id = message.chat.id
+
+    # Delete old format selection message if it exists
+    old = user_last_format_message.get(user_id)
+    if old:
+        old_chat_id, old_msg_id = old
+        try:
+            await client.delete_messages(old_chat_id, old_msg_id)
+        except:
+            pass  # Ignore errors
+
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ User:Pass Only", callback_data=f"format_{keyword}_userpass")],
         [InlineKeyboardButton("🌍 Include URLs", callback_data=f"format_{keyword}_full")]
     ])
-    await message.reply(f"🔎 **Keyword Selected:** `{keyword}`\n\n📌 **Choose Output Format:**", reply_markup=keyboard)
+
+    new_msg = await message.reply(
+        f"🔎 **Keyword Selected:** `{keyword}`\n\n📌 **Choose Output Format:**",
+        reply_markup=keyboard
+    )
+
+    user_last_format_message[user_id] = (chat_id, new_msg.id)
 
 # --- Search execution ---
-
-def get_log_files():
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    return [os.path.join(current_dir, f) for f in os.listdir(current_dir) if f.endswith(".txt")]
-
 @app.on_callback_query(filters.regex("^format_"))
 async def perform_search(client, callback_query):
     await callback_query.message.delete()  # Delete the format selection message
@@ -894,6 +918,13 @@ import os
 from datetime import datetime, timezone
 from pyrogram import filters
 
+ADMIN_ID = 5110224851  # Your Telegram ID
+
+SUPABASE_URL = "https://psxjagzdlcrxtonmezpm.supabase.co"
+SUPABASE_HEADERS = {
+    "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzeGphZ3pkbGNyeHRvbm1lenBtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NDIwNDM2OCwiZXhwIjoyMDU5NzgwMzY4fQ.9-UTy_y0qDEfK6N0n_YspX3BcY3CVMb2bk9tPaiddWU"
+}
+
 def has_vip_access(user_id):
     response = requests.get(f"{SUPABASE_URL}/rest/v1/keys?redeemed_by=eq.{user_id}", headers=SUPABASE_HEADERS)
     data = response.json()
@@ -965,7 +996,7 @@ async def search_vip1(client, message):
         await message.reply(error_message)
         return
 
-    searching_msg = await message.reply("🔍 Searching Supabase for VIP1 results...")
+    searching_msg = await message.reply("🔍 Searching Lines for VIP1 results...")
 
     response = requests.get(
         f"{SUPABASE_URL}/rest/v1/entries?category=eq.vip1&select=username,pass",
@@ -1018,7 +1049,7 @@ async def search_vip2(client, message):
         await message.reply(error_message)
         return
 
-    searching_msg = await message.reply("🔍 Searching Supabase for VIP2 results...")
+    searching_msg = await message.reply("🔍 Searching Lines for VIP2 results...")
 
     response = requests.get(
         f"{SUPABASE_URL}/rest/v1/entries?category=eq.vip2&select=username,pass",
@@ -1246,5 +1277,52 @@ async def bulk_check(file_path, cookies, message):
         f"\u2705 Success: {successful_count}\n"
         f"\u274c Failed: {failed_count}"
     )
+
+from pyrogram import filters
+from pyrogram.types import Message
+from collections import defaultdict
+from supabase import create_client, Client
+
+KEYWORDS = [
+    "100082", "100055", "gaslite", "garena",
+    "authgop", "roblox", "codashop", "mtacc"
+]
+
+CATEGORIES = ["vip1", "vip2"]
+
+@app.on_message(filters.command("checklines"))
+async def check_lines(_, message: Message):
+    try:
+        # Initialize counters
+        counts = defaultdict(int)
+
+        # Count VIP1 and VIP2 by category
+        for cat in CATEGORIES:
+            query = supabase.table("entries").select("id", count="exact").eq("category", cat)
+            res = query.execute()
+            counts[cat] = res.count or 0
+
+        # Count keyword matches in "line" field (category: search)
+        for keyword in KEYWORDS:
+            query = supabase.table("entries").select("line", count="exact").ilike("line", f"%{keyword}%")
+            res = query.execute()
+            counts[keyword] = res.count or 0
+
+        # Build stylish result box
+        lines = []
+        lines.append("╔══════════════════════════════╗")
+        lines.append("║     🔍 LINES STATUS CHECK     ║")
+        lines.append("╠══════════════════════════════╣")
+        lines.append(f"║ vip1:     ({counts['vip1']}) lines")
+        lines.append(f"║ vip2:     ({counts['vip2']}) lines")
+        lines.append("╠──────────────────────────────╣")
+        for keyword in KEYWORDS:
+            lines.append(f"║ {keyword:<10} ({counts[keyword]}) lines")
+        lines.append("╚══════════════════════════════╝")
+
+        await message.reply_text("\n".join(lines))
+    except Exception as e:
+        await message.reply_text(f"❌ Error: {str(e)}")
+
 
 app.run()
