@@ -1330,7 +1330,6 @@ import requests
 from pyrogram import filters
 from io import BytesIO
 
-
 @app.on_message(filters.command("makelogo"))
 async def make_logo(client, message):
     REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
@@ -1350,15 +1349,15 @@ async def make_logo(client, message):
     try:
         replicate_client = replicate.Client(api_token=REPLICATE_API_TOKEN)
         output = replicate_client.run(
-            "laion-ai/erlich",  # Updated model
+            "recraft-ai/recraft-v3-svg",
             input={"prompt": prompt}
         )
         image_url = output[0]
         image_data = requests.get(image_url).content
         image = BytesIO(image_data)
-        image.name = "logo.png"
+        image.name = "logo.svg"
 
-        await message.reply_photo(photo=image, caption=f"✅ Logo for: `{prompt}`")
+        await message.reply_document(document=image, caption=f"✅ Logo for: `{prompt}`")
 
     except Exception as e:
         await message.reply(f"❌ Error generating logo:\n`{e}`")
