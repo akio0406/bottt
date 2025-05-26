@@ -1325,19 +1325,12 @@ async def check_lines(_, message: Message):
         await message.reply_text(f"❌ Error: {str(e)}")
 
 import os
-import replicate
 import requests
-from pyrogram import filters
+from pyrogram import Client, filters
 from io import BytesIO
 
 @app.on_message(filters.command("makelogo"))
 async def make_logo(client, message):
-    REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
-    
-    if REPLICATE_API_TOKEN is None:
-        await message.reply("❌ REPLICATE_API_TOKEN is not set in environment.")
-        return
-
     if len(message.command) < 2:
         await message.reply("ℹ️ Usage: `/makelogo your text here`")
         return
@@ -1347,17 +1340,22 @@ async def make_logo(client, message):
     await message.reply("🎨 Generating your logo...")
 
     try:
-        replicate_client = replicate.Client(api_token=REPLICATE_API_TOKEN)
-        output = replicate_client.run(
-            "recraft-ai/recraft-v3-svg",
-            input={"prompt": prompt}
+        # Send a request to the Hugging Face Space
+        response = requests.post(
+            "https://huggingface.co/spaces/fantaxy/ofai-flx-logo/run/predict",
+            json={"data": [prompt, 512, 512, 4]}  # Adjust parameters as needed
         )
-        image_url = output[0]
-        image_data = requests.get(image_url).content
-        image = BytesIO(image_data)
-        image.name = "logo.svg"
 
-        await message.reply_document(document=image, caption=f"✅ Logo for: `{prompt}`")
+        if response.status_code == 200:
+            # Extract the image URL from the response
+            image_url = response.json().get("data")[0]
+            image_data = requests.get(image_url).content
+            image = BytesIO(image_data)
+            image.name = "logo.png"
+
+            await message.reply_photo(photo=image, caption=f"✅ Logo for: `{prompt}`")
+        else:
+            await message.reply(f"❌ Error generating logo: {response.text}")
 
     except Exception as e:
         await message.reply(f"❌ Error generating logo:\n`{e}`")
