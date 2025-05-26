@@ -1326,10 +1326,10 @@ async def check_lines(_, message: Message):
 
 import os
 import requests
-from pyrogram import Client, filters
 from io import BytesIO
+from pyrogram import filters
 
-HUGGINGFACE_API_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN")
+API_TOKEN = os.getenv("HF_API_TOKEN")
 
 @app.on_message(filters.command("makelogo"))
 async def make_logo(client, message):
@@ -1340,40 +1340,26 @@ async def make_logo(client, message):
     prompt = message.text.split(" ", 1)[1].strip()
     await message.reply("🎨 Generating your logo...")
 
-    if not HUGGINGFACE_API_TOKEN:
-        await message.reply("❌ HUGGINGFACE_API_TOKEN is not set in environment.")
-        return
-
-    headers = {
-        "Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "inputs": prompt,
-        # Add any other parameters the model needs here if necessary
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
+    payload = {"inputs": prompt}
 
     try:
         response = requests.post(
             "https://api-inference.huggingface.co/models/fantaxy/ofai-flx-logo",
             headers=headers,
-            json=payload,
-            timeout=60
+            json=payload
         )
 
         if response.status_code == 200:
-            # The response is usually bytes of the image directly for Hugging Face Inference API
-            image_data = response.content
-            image = BytesIO(image_data)
+            # Parse image bytes from response depending on model output format
+            image_bytes = response.content  # or decode base64, etc.
+            image = BytesIO(image_bytes)
             image.name = "logo.png"
-
             await message.reply_photo(photo=image, caption=f"✅ Logo for: `{prompt}`")
         else:
             await message.reply(f"❌ Error generating logo:\nStatus Code: {response.status_code}\n{response.text}")
 
     except Exception as e:
-        await message.reply(f"❌ Error generating logo:\n`{e}`")
-
+        await message.reply(f"❌ Exception: `{e}`")
 
 app.run()
