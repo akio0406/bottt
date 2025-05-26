@@ -34,7 +34,7 @@ API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH", "")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
-
+REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_ROLE = os.getenv("SUPABASE_SERVICE_ROLE", "")
 SUPABASE_HEADERS = {
@@ -1330,10 +1330,11 @@ import requests
 from pyrogram import filters
 from io import BytesIO
 
-REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
 
 @app.on_message(filters.command("makelogo"))
 async def make_logo(client, message):
+    REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
+    
     if REPLICATE_API_TOKEN is None:
         await message.reply("❌ REPLICATE_API_TOKEN is not set in environment.")
         return
@@ -1349,7 +1350,7 @@ async def make_logo(client, message):
     try:
         replicate_client = replicate.Client(api_token=REPLICATE_API_TOKEN)
         output = replicate_client.run(
-            "tstramer/logocrafter:db21c7fcfcad7b5cf8e75107adf2c3f6cfba5ad22e6e8e17dcfb0cfbff2b6d68",  # Logocrafter
+            "laion-ai/erlich",  # Updated model
             input={"prompt": prompt}
         )
         image_url = output[0]
@@ -1361,6 +1362,5 @@ async def make_logo(client, message):
 
     except Exception as e:
         await message.reply(f"❌ Error generating logo:\n`{e}`")
-
 
 app.run()
