@@ -1324,5 +1324,43 @@ async def check_lines(_, message: Message):
     except Exception as e:
         await message.reply_text(f"❌ Error: {str(e)}")
 
+import os
+import replicate
+import requests
+from pyrogram import filters
+from io import BytesIO
+
+REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
+
+@app.on_message(filters.command("makelogo"))
+async def make_logo(client, message):
+    if REPLICATE_API_TOKEN is None:
+        await message.reply("❌ REPLICATE_API_TOKEN is not set in environment.")
+        return
+
+    if len(message.command) < 2:
+        await message.reply("ℹ️ Usage: `/makelogo your text here`")
+        return
+
+    prompt = message.text.split(" ", 1)[1].strip()
+
+    await message.reply("🎨 Generating your logo...")
+
+    try:
+        replicate_client = replicate.Client(api_token=REPLICATE_API_TOKEN)
+        output = replicate_client.run(
+            "tstramer/logocrafter:db21c7fcfcad7b5cf8e75107adf2c3f6cfba5ad22e6e8e17dcfb0cfbff2b6d68",  # Logocrafter
+            input={"prompt": prompt}
+        )
+        image_url = output[0]
+        image_data = requests.get(image_url).content
+        image = BytesIO(image_data)
+        image.name = "logo.png"
+
+        await message.reply_photo(photo=image, caption=f"✅ Logo for: `{prompt}`")
+
+    except Exception as e:
+        await message.reply(f"❌ Error generating logo:\n`{e}`")
+
 
 app.run()

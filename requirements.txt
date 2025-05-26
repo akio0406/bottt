@@ -3,3 +3,5 @@ tgcrypto
 requests
 pytz
 supabase
+replicate
+
