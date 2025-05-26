@@ -1329,6 +1329,8 @@ import requests
 from pyrogram import Client, filters
 from io import BytesIO
 
+HUGGINGFACE_API_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN")
+
 @app.on_message(filters.command("makelogo"))
 async def make_logo(client, message):
     if len(message.command) < 2:
@@ -1336,28 +1338,42 @@ async def make_logo(client, message):
         return
 
     prompt = message.text.split(" ", 1)[1].strip()
-
     await message.reply("🎨 Generating your logo...")
 
+    if not HUGGINGFACE_API_TOKEN:
+        await message.reply("❌ HUGGINGFACE_API_TOKEN is not set in environment.")
+        return
+
+    headers = {
+        "Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "inputs": prompt,
+        # Add any other parameters the model needs here if necessary
+    }
+
     try:
-        # Send a request to the Hugging Face Space
         response = requests.post(
-            "https://huggingface.co/spaces/fantaxy/ofai-flx-logo/run/predict",
-            json={"data": [prompt, 512, 512, 4]}  # Adjust parameters as needed
+            "https://api-inference.huggingface.co/models/fantaxy/ofai-flx-logo",
+            headers=headers,
+            json=payload,
+            timeout=60
         )
 
         if response.status_code == 200:
-            # Extract the image URL from the response
-            image_url = response.json().get("data")[0]
-            image_data = requests.get(image_url).content
+            # The response is usually bytes of the image directly for Hugging Face Inference API
+            image_data = response.content
             image = BytesIO(image_data)
             image.name = "logo.png"
 
             await message.reply_photo(photo=image, caption=f"✅ Logo for: `{prompt}`")
         else:
-            await message.reply(f"❌ Error generating logo: {response.text}")
+            await message.reply(f"❌ Error generating logo:\nStatus Code: {response.status_code}\n{response.text}")
 
     except Exception as e:
         await message.reply(f"❌ Error generating logo:\n`{e}`")
+
 
 app.run()
